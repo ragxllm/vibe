@@ -151,21 +151,37 @@
 
     // 3. 상태 토글
     async function toggleItem(id, currentStatus) {
-        await fetch('/api/items', {
+        const pw = prompt("상태를 변경하려면 비밀번호를 입력하세요:");
+        if (!pw) return fetchItems(); // 취소 시 목록 다시 불러와서 체크박스 원복
+    
+        const res = await fetch('/api/items', {
             method: 'PATCH',
-            body: JSON.stringify({ id, completed: !currentStatus })
+            body: JSON.stringify({ id, completed: !currentStatus, password: pw })
         });
-        await fetchItems();
+    
+        if (res.status === 403) {
+            alert("비밀번호가 틀렸습니다.");
+            fetchItems(); // 원복
+        } else {
+            fetchItems();
+        }
     }
 
     // 4. 삭제
     async function deleteItem(id) {
-        if(!confirm("정말 삭제하시겠습니까?")) return;
-        await fetch('/api/items', {
+        const pw = prompt("삭제 비밀번호를 입력하세요:");
+        if (!pw) return; // 취소 시 중단
+    
+        const res = await fetch('/api/items', {
             method: 'DELETE',
-            body: JSON.stringify({ id })
+            body: JSON.stringify({ id, password: pw }) // 비번 포함
         });
-        await fetchItems();
+    
+        if (res.status === 403) {
+            alert("비밀번호가 틀렸습니다.");
+        } else {
+            fetchItems();
+        }
     }
 
     // 화면 그리기
@@ -203,4 +219,5 @@
 </script>
 
 </body>
+
 </html>
