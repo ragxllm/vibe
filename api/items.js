@@ -11,6 +11,8 @@ export default async function handler(req, res) {
   const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   const { method } = req;
 
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
   try {
     if (method === 'GET') {
       const { data, error } = await supabase
@@ -33,26 +35,31 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    if (method === 'PATCH') {
-      const { id, completed } = payload;
-      const { error } = await supabase
-        .from('shopping_items')
-        .update({ completed })
-        .eq('id', id);
-      
-      if (error) throw error;
-      return res.status(200).send('Updated');
-    }
+    if (method === 'PATCH' || method === 'DELETE') {
+      const { id, completed, password } = payload; // 프론트에서 보낸 password 추출
 
-    if (method === 'DELETE') {
-      const { id } = payload;
-      const { error } = await supabase
-        .from('shopping_items')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      return res.status(200).send('Deleted');
+      // 비밀번호가 틀렸을 경우 403(Forbidden) 에러 반환
+      if (password !== ADMIN_PASSWORD) {
+        return res.status(403).json({ error: '비밀번호가 올바르지 않습니다.' });
+      }
+
+      if (method === 'PATCH') {
+        const { error } = await supabase
+          .from('shopping_items')
+          .update({ completed })
+          .eq('id', id);
+        if (error) throw error;
+        return res.status(200).send('Updated');
+      }
+
+      if (method === 'DELETE') {
+        const { error } = await supabase
+          .from('shopping_items')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+        return res.status(200).send('Deleted');
+      }
     }
 
     // 허용되지 않은 메서드 처리
@@ -62,4 +69,5 @@ export default async function handler(req, res) {
     console.error('Server Error:', error);
     return res.status(500).json({ error: error.message });
   }
+
 }
