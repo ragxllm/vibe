@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 쇼핑 리스트</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f4f7f6;
+            --text-color: #333;
+            --accent-color: #ff5e5e;
+        }
+
+        body {
+            font-family: 'Pretendard', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            padding: 50px 20px;
+            color: var(--text-color);
+        }
+
+        .container {
+            background: white;
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        h2 { text-align: center; margin-bottom: 1.5rem; color: var(--primary-color); }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        input[type="text"]:focus { border-color: var(--primary-color); }
+
+        button#add-btn {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        ul { list-style: none; padding: 0; margin-bottom: 20px; }
+
+        li {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            gap: 10px;
+        }
+
+        .item-text { flex-grow: 1; cursor: pointer; }
+        .completed .item-text { text-decoration: line-through; color: #888; }
+
+        .delete-btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+        .stats { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 600; color: #666; }
+        .stats span b { color: var(--primary-color); }
+        
+        #loading { text-align: center; font-size: 0.8rem; color: #999; margin-bottom: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🛒 쇼핑 리스트</h2>
+    
+    <div class="input-group">
+        <input type="text" id="item-input" placeholder="살 물건을 입력하세요...">
+        <button id="add-btn">추가</button>
+    </div>
+
+    <div id="loading">데이터 동기화 중...</div>
+    <ul id="shopping-list"></ul>
+
+    <hr>
+    <div class="stats">
+        <span>전체: <b id="total-count">0</b></span>
+        <span>완료: <b id="completed-count">0</b></span>
+        <span>남음: <b id="remaining-count">0</b></span>
+    </div>
+</div>
+
+<script>
+    const input = document.getElementById('item-input');
+    const addBtn = document.getElementById('add-btn');
+    const shoppingList = document.getElementById('shopping-list');
+    const loading = document.getElementById('loading');
+
+    let items = [];
+
+    function showLoading(show) {
+        loading.style.display = show ? 'block' : 'none';
+    }
+
+    // 1. 데이터 가져오기
+    async function fetchItems() {
+        showLoading(true);
+        try {
+            const res = await fetch('/api/items');
+            items = await res.json();
+            render();
+        } catch (e) {
+            console.error("데이터 로드 실패", e);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 2. 아이템 추가
+    async function addItem() {
+        const text = input.value.trim();
+        if (!text) return;
+        
+        showLoading(true);
+        await fetch('/api/items', {
+            method: 'POST',
+            body: JSON.stringify({ text, completed: false })
+        });
+        input.value = '';
+        await fetchItems();
+    }
+
+    // 3. 상태 토글
+    async function toggleItem(id, currentStatus) {
+        await fetch('/api/items', {
+            method: 'PATCH',
+            body: JSON.stringify({ id, completed: !currentStatus })
+        });
+        await fetchItems();
+    }
+
+    // 4. 삭제
+    async function deleteItem(id) {
+        if(!confirm("정말 삭제하시겠습니까?")) return;
+        await fetch('/api/items', {
+            method: 'DELETE',
+            body: JSON.stringify({ id })
+        });
+        await fetchItems();
+    }
+
+    // 화면 그리기
+    function render() {
+        shoppingList.innerHTML = '';
+        items.forEach((item) => {
+            const li = document.createElement('li');
+            if (item.completed) li.classList.add('completed');
+
+            li.innerHTML = `
+                <input type="checkbox" class="checkbox" ${item.completed ? 'checked' : ''} 
+                    onchange="toggleItem(${item.id}, ${item.completed})">
+                <span class="item-text" onclick="toggleItem(${item.id}, ${item.completed})">${item.text}</span>
+                <button class="delete-btn" onclick="deleteItem(${item.id})">삭제</button>
+            `;
+            shoppingList.appendChild(li);
+        });
+        updateStats();
+    }
+
+    function updateStats() {
+        const total = items.length;
+        const completed = items.filter(i => i.completed).length;
+        document.getElementById('total-count').textContent = total;
+        document.getElementById('completed-count').textContent = completed;
+        document.getElementById('remaining-count').textContent = total - completed;
+    }
+
+    // 이벤트 리스너
+    addBtn.addEventListener('click', addItem);
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') addItem(); });
+
+    // 초기 실행
+    fetchItems();
+</script>
+
+</body>
+</html>
